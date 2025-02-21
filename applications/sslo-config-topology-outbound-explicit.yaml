@@ -1,0 +1,49 @@
+---
+- name: Create an SSLO Outbound Explicit Proxy Topology
+  hosts: all
+  connection: httpapi
+  gather_facts: false
+
+  collections:
+    - f5networks.f5_bigip
+
+  vars:
+    ansible_host: "{{ lookup('ansible.builtin.env', 'BIGHOST') }}"
+    ansible_httpapi_password: "{{ lookup('ansible.builtin.env', 'BIGPASS') }}"
+    ansible_httpapi_port: 443
+    ansible_user: "admin"
+    ansible_network_os: f5networks.f5_bigip.bigip
+    ansible_httpapi_use_ssl: yes
+    ansible_httpapi_validate_certs: no
+
+  tasks:
+    - fail:
+        msg: "Environment variable 'BIGHOST' is empty. Do `export BIGHOST='host'`"
+      when: lookup('env', 'BIGHOST') | length == 0
+
+    - fail:
+        msg: "Environment variable 'BIGPASS' is empty. Do `export BIGPASS='pass'`"
+      when: lookup('env', 'BIGPASS') | length == 0
+
+    - name: Create an SSLO explicit proxy topology
+      bigip_sslo_config_topology:
+        name: "my_sslo_out_exp"
+        topology_type: "outbound_explicit"
+        proxy_ip: "10.1.10.150"
+        proxy_port: 3128
+        dns_resolver: "/Common/ssloGS_global.app/ssloGS-net-resolver"
+        vlans:
+          - "/Common/client-vlan"
+        gateway: "iplist"
+        gateway_list:
+          - ip: "10.1.60.1"
+        snat: "automap"
+        ssl_settings: "conf_ssl_outbound"
+        profile_scope: "public"
+        security_policy: "my_policy_outbound"
+        #dump_json: true
+        #state: absent
+      register: json_response
+
+    - debug:
+        msg: "{{ json_response }}
