@@ -1,0 +1,89 @@
+## Full-box SSLO Use Case: Inbound GW
+## Builds:
+## - TAP inspection service
+## - Service chain
+## - Security policy
+## - Inbound SSL config
+## - Inbound gateway SSLO topology
+---
+- name: Create an SSLO Full-box Use Case - Inbound GW
+  hosts: all
+  connection: httpapi
+  gather_facts: false
+
+  collections:
+    - f5networks.f5_bigip
+
+  vars:
+    ansible_host: "{{ lookup('ansible.builtin.env', 'BIGHOST') }}"
+    ansible_httpapi_password: "{{ lookup('ansible.builtin.env', 'BIGPASS') }}"
+    ansible_httpapi_port: 443
+    ansible_user: "admin"
+    ansible_network_os: f5networks.f5_bigip.bigip
+    ansible_httpapi_use_ssl: yes
+    ansible_httpapi_validate_certs: no
+
+  tasks:
+    - fail:
+        msg: "Environment variable 'BIGHOST' is empty. Do `export BIGHOST='host'`"
+      when: lookup('env', 'BIGHOST') | length == 0
+
+    - fail:
+        msg: "Environment variable 'BIGPASS' is empty. Do `export BIGPASS='pass'`"
+      when: lookup('env', 'BIGPASS') | length == 0
+
+    ## Create Inspection Services
+    - name: Create an SSLO TAP Inspection Service
+      bigip_sslo_service_tap:
+        name: "insp_tap"
+        devices:
+          interface: "1.3"
+        mac_address: "12:12:12:12:12:12"
+
+    ## Create a Service Chain
+    - name: Create an SSLO Service Chain
+      bigip_sslo_config_service_chain:
+        name: "sc_all_services"
+        services:
+          - service_name: "insp_tap"
+            type: "tap"
+
+    ## Create an SSLO policy
+    - name: Create an SSLO inbound Policy
+      bigip_sslo_config_policy:
+        name: "my_policy_inbound"
+        policy_consumer: "inbound"
+        policy_rules:
+          - name: "bypass_by_cip"
+            policy_action: "allow"
+            ssl_action: "bypass"
+            conditions:
+              - condition_type: "client_ip_subnet_match"
+                condition_option_subnet:
+                  - "10.1.10.0/24"
+        default_rule:
+          allow_block: "allow"
+          tls_intercept: "intercept"
+
+    ## Create inbound SSL settings
+    - name: Create an SSLO Inbound SSL Config - gwapp1
+      bigip_sslo_config_ssl:
+        name: "ssl_inbound_gwapp1"
+        client_settings:
+          proxy_type: "reverse"
+          cert: "/Common/gwapp1.f5labs.com"
+          key: "/Common/gwapp1.f5labs.com"
+
+    ## Create an outbound GW topology
+    - name: Create an SSLO inbound gateway topology
+      bigip_sslo_config_topology:
+        name: "my_sslo_in_gw"
+        topology_type: "inbound_l3"
+        dest: "0.0.0.0%0/0"
+        port: 443
+        vlans:
+          - "/Common/client-vlan"
+        snat: "automap"
+        ssl_settings: "ssl_inbound_gwapp1"
+        profile_scope: "public"
+        security_policy: "my_policy_inbound"
