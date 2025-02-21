@@ -1,0 +1,42 @@
+---
+- name: Create an SSLO SSL Config - Outbound
+  hosts: all
+  connection: httpapi
+  gather_facts: false
+
+  collections:
+    - f5networks.f5_bigip
+
+  vars:
+    ansible_host: "{{ lookup('ansible.builtin.env', 'BIGHOST') }}"
+    ansible_httpapi_password: "{{ lookup('ansible.builtin.env', 'BIGPASS') }}"
+    ansible_httpapi_port: 443
+    ansible_user: "admin"
+    ansible_network_os: f5networks.f5_bigip.bigip
+    ansible_httpapi_use_ssl: yes
+    ansible_httpapi_validate_certs: no
+
+  tasks:
+    - fail:
+        msg: "Environment variable 'BIGHOST' is empty. Do `export BIGHOST='host'`"
+      when: lookup('env', 'BIGHOST') | length == 0
+
+    - fail:
+        msg: "Environment variable 'BIGPASS' is empty. Do `export BIGPASS='pass'`"
+      when: lookup('env', 'BIGPASS') | length == 0
+
+    - name: Create an SSLO Outbound SSL Config
+      bigip_sslo_config_ssl:
+        name: "conf_ssl_outbound"
+        client_settings:
+          proxy_type: "forward"
+          ca_cert: "/Common/subrsa.f5labs.com"
+          ca_key: "/Common/subrsa.f5labs.com"
+        server_settings:
+          ca_bundle: "/Common/ca-bundle.crt"
+        #dump_json: true
+        #state: absent
+      register: json_response
+
+    - debug:
+        msg: "{{ json_response }}"
