@@ -1,0 +1,63 @@
+---
+- name: Create an SSLO Inspection Service - Inline L3
+  hosts: all
+  connection: httpapi
+  gather_facts: false
+
+  collections:
+    - f5networks.f5_bigip
+
+  vars:
+    ansible_host: "{{ lookup('ansible.builtin.env', 'BIGHOST') }}"
+    ansible_httpapi_password: "{{ lookup('ansible.builtin.env', 'BIGPASS') }}"
+    ansible_httpapi_port: 443
+    ansible_user: "admin"
+    ansible_network_os: f5networks.f5_bigip.bigip
+    ansible_httpapi_use_ssl: yes
+    ansible_httpapi_validate_certs: no
+
+  tasks:
+    - fail:
+        msg: "Environment variable 'BIGHOST' is empty. Do `export BIGHOST='host'`"
+      when: lookup('env', 'BIGHOST') | length == 0
+
+    - fail:
+        msg: "Environment variable 'BIGPASS' is empty. Do `export BIGPASS='pass'`"
+      when: lookup('env', 'BIGPASS') | length == 0
+
+    - name: Create an SSLO Inline L3 Inspection Service
+      bigip_sslo_service_layer3:
+        name: "insp_inline_l3"
+        auto_manage: false
+        devices_to:
+          interface: "1.2"
+          tag: 60
+          self_ip: "198.19.64.7"
+          netmask: "255.255.255.128"
+        devices_from:
+          interface: "1.2"
+          tag: 70
+          self_ip: "198.19.64.245"
+          netmask: "255.255.255.128"
+        devices:
+          - ip: "198.19.64.30"
+        port_remap: 8080
+		    service_entry_sslprofile: "/Common/serverssl"
+        service_return_sslprofile: "/Common/clientssl"
+        control_channels:
+          - source_ip: "198.19.65.0/25"
+            destination_ip: "8.8.8.8/32"
+            destination_port: 53
+            protocol: "udp"
+            snat: "automap"
+          - source_ip: "198.19.65.0/25"
+            destination_ip: "8.8.8.8/32"
+            destination_port: 53
+            protocol: "tcp"
+            snat: "automap"
+        #dump_json: true
+        #state: absent
+      register: json_response
+
+    - debug:
+        msg: "{{ json_response }}"
